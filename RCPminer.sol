@@ -16,7 +16,6 @@ contract RCPFaucet is Ownable {
     uint256 public constant COOLDOWN = 1 hours; // Can mine once per hour
     
     event Mined(address indexed miner, uint256 amount, uint256 timestamp);
-    event ContractFunded(address indexed funder, uint256 amount);
     event EmergencyWithdraw(address indexed owner, uint256 amount);
     
     constructor(address _tokenAddress) Ownable() {
