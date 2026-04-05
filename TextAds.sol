@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract TextBoard {
-    // Circular buffer storage - fixed size array
-    Message[MAX_MESSAGES] private messages;
-    uint256 private currentIndex; // Points to where NEXT message will be stored (also the oldest when full)
-    uint256 private messageCount; // Total number of messages ever posted (not just stored)
+contract MessageBoard {
+    // Use mapping for circular buffer - more flexible than fixed array
+    mapping(uint256 => Message) private messages;
+    uint256 private currentIndex; // Points to where NEXT message will be stored
+    uint256 private messageCount; // Total number of messages ever posted
     
     struct Message {
         string content;
@@ -36,13 +36,12 @@ contract TextBoard {
     }
 
     function postMessage(string calldata _content) external sanitizedInput(_content) {
-        require(bytes(_content).length > 0, "Message cannot be empty");
-        
+         
         uint256 slot;
-        uint256 newSequence = messageCount; // Sequence number for the new message
+        uint256 newSequence = messageCount;
         
         if (messageCount < MAX_MESSAGES) {
-            // Buffer not full yet - just append
+            // Buffer not full yet - just use messageCount as slot
             slot = messageCount;
             messages[slot] = Message({
                 content: _content,
@@ -53,24 +52,18 @@ contract TextBoard {
             
             emit MessagePosted(slot, newSequence, msg.sender, _content);
         } else {
-            // Buffer is full - overwrite oldest message
+            // Buffer is full - overwrite oldest message at currentIndex
             slot = currentIndex;
-            
-            // Calculate sequence of message being deleted
-            // When buffer is full, the oldest stored message has sequence: messageCount - MAX_MESSAGES
             uint256 deletedSequence = messageCount - MAX_MESSAGES;
             
-            // Emit deletion event BEFORE overwriting
             emit MessageDeleted(slot, deletedSequence, messages[slot].author);
             
-            // Overwrite with new message
             messages[slot] = Message({
                 content: _content,
                 author: msg.sender,
                 timestamp: block.timestamp
             });
             
-            // Update circular pointer
             currentIndex = (currentIndex + 1) % MAX_MESSAGES;
             messageCount++;
             
@@ -78,17 +71,15 @@ contract TextBoard {
         }
     }
 
-    // Get message by sequence number (0 = first message ever)
-    function getMessageBySequence(uint256 _sequence) external view returns (string memory, address, uint256) {
+    // Get message by sequence number
+    function getMessageBySequence(uint256 _sequence) public view returns (string memory, address, uint256) {
         require(_sequence < messageCount, "Sequence out of range");
         
         uint256 slot;
         if (messageCount < MAX_MESSAGES) {
-            // Buffer never wrapped - direct mapping
             slot = _sequence;
         } else {
-            // Buffer has wrapped - map sequence to circular slot
-            // The oldest message (sequence = messageCount - MAX_MESSAGES) is at currentIndex
+            require(_sequence >= messageCount - MAX_MESSAGES, "Sequence no longer stored");
             uint256 offset = _sequence - (messageCount - MAX_MESSAGES);
             slot = (currentIndex + offset) % MAX_MESSAGES;
         }
@@ -97,8 +88,26 @@ contract TextBoard {
         require(msgData.author != address(0), "Message not found");
         return (msgData.content, msgData.author, msgData.timestamp);
     }
+    
+    // Get oldest currently stored message
+    function getOldestMessage() external view returns (string memory, address, uint256) {
+        require(messageCount > 0, "No messages");
+        
+        if (messageCount < MAX_MESSAGES) {
+            return getMessageBySequence(0);
+        } else {
+            return getMessageBySequence(messageCount - MAX_MESSAGES);
+        }
+    }
 
-    // Get most recent N messages (newest first)
+    // Get newest message
+    function getNewestMessage() external view returns (string memory, address, uint256) {
+        require(messageCount > 0, "No messages");
+        return getMessageBySequence(messageCount - 1);
+    }
+    
+   
+    // Get recent messages (newest first)
     function getRecentMessages(uint256 _count) external view returns (Message[] memory) {
         uint256 count = _count;
         if (count > messageCount) count = messageCount;
@@ -106,18 +115,17 @@ contract TextBoard {
         Message[] memory recent = new Message[](count);
         if (messageCount == 0) return recent;
         
-        // Cache values
         uint256 cachedMessageCount = messageCount;
         uint256 cachedCurrentIndex = currentIndex;
         
         if (cachedMessageCount < MAX_MESSAGES) {
-            // Fast path: linear array
+            // Linear mapping
             for (uint256 i = 0; i < count; i++) {
-                recent[i] = messages[cachedMessageCount - 1 - i];
+                uint256 sequence = cachedMessageCount - 1 - i;
+                recent[i] = messages[sequence];
             }
         } else {
-            // Circular buffer path
-            // Newest message is at sequence (cachedMessageCount - 1)
+            // Circular mapping
             uint256 newestSequence = cachedMessageCount - 1;
             uint256 oldestSequence = cachedMessageCount - MAX_MESSAGES;
             uint256 newestSlot = (cachedCurrentIndex + (newestSequence - oldestSequence)) % MAX_MESSAGES;
@@ -135,38 +143,8 @@ contract TextBoard {
         
         return recent;
     }
-
-    // Helper: Get storage slot for a given sequence
-    function getSlotForSequence(uint256 _sequence) external view returns (uint256) {
-        require(_sequence < messageCount, "Sequence out of range");
-        
-        if (messageCount < MAX_MESSAGES) {
-            return _sequence;
-        } else {
-            require(_sequence >= messageCount - MAX_MESSAGES, "Sequence no longer stored");
-            uint256 offset = _sequence - (messageCount - MAX_MESSAGES);
-            return (currentIndex + offset) % MAX_MESSAGES;
-        }
-    }
-
-    // Get oldest currently stored message (sequence = messageCount - MAX_MESSAGES when full)
-    function getOldestMessage() external view returns (string memory, address, uint256) {
-        require(messageCount > 0, "No messages");
-        
-        if (messageCount < MAX_MESSAGES) {
-            return getMessageBySequence(0);
-        } else {
-            return getMessageBySequence(messageCount - MAX_MESSAGES);
-        }
-    }
-
-    // Get newest message (last posted)
-    function getNewestMessage() external view returns (string memory, address, uint256) {
-        require(messageCount > 0, "No messages");
-        return getMessageBySequence(messageCount - 1);
-    }
-
-    // View functions
+    
+    // Simple view functions
     function getMessageCount() external view returns (uint256) {
         return messageCount;
     }
@@ -208,14 +186,12 @@ contract TextBoard {
         }
     }
     
-    // Get the first sequence number currently stored (useful for frontend pagination)
     function getFirstStoredSequence() external view returns (uint256) {
         if (messageCount == 0) return 0;
         if (messageCount < MAX_MESSAGES) return 0;
         return messageCount - MAX_MESSAGES;
     }
     
-    // Get the last sequence number currently stored
     function getLastStoredSequence() external view returns (uint256) {
         if (messageCount == 0) return 0;
         return messageCount - 1;
