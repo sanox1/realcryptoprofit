@@ -104,7 +104,7 @@ contract RCPT is IERC20, Ownable {
         emit Transfer(msg.sender, address(0), amount);
     }
 
-    function renounceContract() external onlyOwner {
+    function renounceOwnershipOfContract() external onlyOwner {
         renounceOwnership();
     }
 }
