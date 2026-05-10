@@ -18,7 +18,4 @@ contract RCPT is ERC20Permit, Ownable {
         _burn(msg.sender, amount);
     }
     
-    function renounceOwnershipOfContract() external onlyOwner {
-        renounceOwnership();
-    }
 }
