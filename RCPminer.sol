@@ -32,7 +32,7 @@ contract RCPFaucet is Ownable {
         }
         
         require(block.timestamp >= lastMined[msg.sender] + COOLDOWN, "Must wait 1 hour between mines");
-        require(minedToday[msg.sender] + REWARD_AMOUNT <= DAILY_LIMIT, "Daily limit of 12 tokens reached");
+        require(minedToday[msg.sender] + REWARD_AMOUNT <= DAILY_LIMIT, "Daily limit of 14 tokens reached");
         
         uint256 contractBalance = token.balanceOf(address(this));
         require(contractBalance >= REWARD_AMOUNT, "Mining pool depleted");
