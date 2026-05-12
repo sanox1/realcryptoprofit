@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract RCPT is ERC20Permit, Ownable {
     constructor(uint256 initialSupply) 
         ERC20Permit("RealCryptoProfit") 
-        ERC20("RealCryptoProfit", "RCP") 
+        ERC20("RealCryptoProfit", "RCPT") 
     {
         if (initialSupply > 0) {
             _mint(msg.sender, initialSupply * 10 ** decimals());
